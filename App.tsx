@@ -1,19 +1,43 @@
 
-import React, { useState, useMemo } from 'react';
-// Fix: Add missing 'Star' and 'Package' imports from lucide-react
-import { Search, MapPin, ShieldCheck, Clock, Camera, Zap, Filter, ArrowRight, Star, Package } from 'lucide-react';
-import { MOCK_ITEMS, SAFE_ZONES, MOCK_USERS } from './constants';
-import { Item, Category } from './types';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Search, MapPin, ShieldCheck, Clock, Camera, Zap, Filter, ArrowRight, Star, Package, Loader2 } from 'lucide-react';
+import { MOCK_ITEMS, SAFE_ZONES } from './constants';
+import { Item, Category, User } from './types';
+import { useAuth } from './contexts/AuthContext';
+import { supabase } from './lib/supabase';
 import Navbar from './components/Navbar';
 import ItemModal from './components/ItemModal';
 import AIChat from './components/AIChat';
+import LoginForm from './components/LoginForm';
+import RegisterForm from './components/RegisterForm';
 
 const App: React.FC = () => {
+  const { user, loading: authLoading } = useAuth();
+  const [userProfile, setUserProfile] = useState<User | null>(null);
   const [items, setItems] = useState<Item[]>(MOCK_ITEMS);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedItem, setSelectedItem] = useState<Item | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showRegisterModal, setShowRegisterModal] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      const fetchUserProfile = async () => {
+        const { data } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (data) {
+          setUserProfile(data as User);
+        }
+      };
+      fetchUserProfile();
+    }
+  }, [user]);
 
   const filteredItems = useMemo(() => {
     return items.filter(item => {
@@ -24,9 +48,100 @@ const App: React.FC = () => {
     });
   }, [items, searchQuery, selectedCategory]);
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
+          <p className="text-slate-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-600 via-blue-700 to-slate-900 flex items-center justify-center p-4">
+        <div className="bg-white rounded-3xl shadow-2xl p-8 md:p-12 max-w-2xl w-full">
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-2 mb-4">
+              <Package size={40} className="text-blue-600" />
+              <h1 className="text-3xl font-black">UniBorrow</h1>
+            </div>
+            <h2 className="text-2xl font-bold text-slate-900 mb-2">
+              Welcome to Campus Rental Marketplace
+            </h2>
+            <p className="text-slate-600">
+              Rent gear, textbooks, and equipment from your peers safely and easily
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-4">
+            <button
+              onClick={() => setShowLoginModal(true)}
+              className="flex-1 bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-slate-800 transition shadow-lg"
+            >
+              Sign In
+            </button>
+            <button
+              onClick={() => setShowRegisterModal(true)}
+              className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg"
+            >
+              Create Account
+            </button>
+          </div>
+
+          <div className="mt-8 grid grid-cols-3 gap-4 pt-8 border-t">
+            <div className="text-center">
+              <ShieldCheck className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+              <p className="text-xs text-slate-600 font-medium">Verified Students Only</p>
+            </div>
+            <div className="text-center">
+              <MapPin className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+              <p className="text-xs text-slate-600 font-medium">Safe Exchange Zones</p>
+            </div>
+            <div className="text-center">
+              <Camera className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+              <p className="text-xs text-slate-600 font-medium">24/7 CCTV Monitored</p>
+            </div>
+          </div>
+        </div>
+
+        {showLoginModal && (
+          <LoginForm
+            onClose={() => setShowLoginModal(false)}
+            onSwitchToRegister={() => {
+              setShowLoginModal(false);
+              setShowRegisterModal(true);
+            }}
+          />
+        )}
+
+        {showRegisterModal && (
+          <RegisterForm
+            onClose={() => setShowRegisterModal(false)}
+            onSwitchToLogin={() => {
+              setShowRegisterModal(false);
+              setShowLoginModal(true);
+            }}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <Navbar onAddClick={() => setShowAddModal(true)} user={MOCK_USERS.felix} />
+      <Navbar
+        onAddClick={() => setShowAddModal(true)}
+        user={userProfile || {
+          id: user.id,
+          name: user.user_metadata?.name || user.email || 'User',
+          avatar: user.user_metadata?.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.id}`,
+          rating: 5.0,
+          verified: false
+        }}
+      />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* --- Hero Section --- */}
